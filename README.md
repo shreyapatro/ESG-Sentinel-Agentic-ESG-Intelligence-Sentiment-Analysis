@@ -48,10 +48,15 @@ The result: ESG analysis at scale requires a team of analysts doing manual PDF r
                │                                    │
                ▼                                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                          Vector Store (ChromaDB)                      │
+│                            Storage Layer                              │
 │                                                                       │
-│   Collection: esg_documents      Collection: esg_news                │
-│   (text chunks + metadata)       (news items + pillar + sentiment)   │
+│  ChromaDB (vector store)       PostgreSQL (scores, metadata)         │
+│  ├── esg_documents             ├── companies                         │
+│  └── esg_news                  ├── esg_scores                        │
+│                                └── anomaly_flags                     │
+│                                                                       │
+│  AWS S3 (raw document store)                                         │
+│  └── PDFs, filings, scraped HTML                                     │
 └──────────────────────────────────┬───────────────────────────────────┘
                                    │
                                    ▼
@@ -73,9 +78,9 @@ The result: ESG analysis at scale requires a team of analysts doing manual PDF r
                │
                ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                      Streamlit Dashboard                              │
-│   Company ESG scores  ·  Trend charts  ·  News sentiment feed       │
-│   Natural language Q&A  ·  Anomaly alerts                           │
+│                        HTML / JS Frontend                             │
+│   Company ESG scores  ·  Trend charts  ·  News sentiment feed        │
+│   Natural language Q&A  ·  Anomaly alerts                            │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -94,6 +99,7 @@ flowchart TD
 
         C1 --> D[(ChromaDB\nesg_documents)]
         C2 --> E[(ChromaDB\nesg_news)]
+        B1 --> S3[(AWS S3\nRaw documents)]
     end
 
     subgraph Query
@@ -108,13 +114,14 @@ flowchart TD
         J[ESG Scoring Agent] --> D
         J --> E
         J --> K[Pillar scores\nE / S / G]
-        K --> L{Anomaly\nDetection}
+        K --> PG[(PostgreSQL\nesg_scores)]
+        PG --> L{Anomaly\nDetection}
         L -->|Filing vs news\nmismatch| M[🚨 Alert flagged]
         L -->|Consistent| N[Score dashboard updated]
     end
 
     I --> O[FastAPI Response]
-    M & N --> P[Streamlit Dashboard]
+    M & N --> P[HTML / JS Frontend]
     O --> P
 
     style D fill:#fff8e8,stroke:#e67e22
@@ -128,31 +135,32 @@ flowchart TD
 ## 🧩 Component Breakdown
 
 ### Document Ingestion Agent
-Handles PDFs of annual reports and BRSR filings. Uses PyMuPDF to extract text, chunks into ~500-token segments, and tags each chunk with:
+Handles PDFs of annual reports and BRSR filings. Uses PyMuPDF to extract text, chunks into ~500-token segments, uploads raw files to AWS S3, and tags each chunk with:
 - `company_name`, `ticker`
 - `document_year`
 - `esg_pillar` (E / S / G / General)
 - `source_document`, `page_number`
 
 ### News Monitoring Agent
-Polls financial news sources, fetches articles, and passes each through the FinBERT classifier. Stores news items with:
+Polls financial news sources, fetches articles, and passes each through the FinBERT classifier. Stores news items in ChromaDB (`esg_news`) and structured metadata in PostgreSQL with:
 - `company_name`
 - `esg_pillar` (E / S / G)
 - `sentiment` (positive / negative / neutral)
 - `sentiment_score`, `published_at`
 
 ### FinBERT Sentiment Classifier
-A fine-tuned BERT model trained on financial text. Extended to classify ESG pillar alongside sentiment — mapping news to E (emissions, water, waste), S (labour, safety, diversity), or G (board, audit, executive pay).
+A fine-tuned BERT model trained on financial text. Extended to classify ESG pillar alongside sentiment — mapping news to E (emissions, water, waste), S (labour, safety, diversity), or G (board, audit, executive pay). Benchmarked against Llama 3.1, Mistral, Qwen3, Gemma3, and DeepSeek-R1 on a curated set of 50 Indian financial news headlines.
 
 ### RAG Query Agent
 On a user query:
 1. Embeds the query using `sentence-transformers`
-2. Retrieves top-k chunks from both `esg_documents` and `esg_news` collections
-3. Passes chunks + query to the LLM for synthesis
-4. Returns answer with inline citations (document/page or news source/date)
+2. Filters ChromaDB by company + pillar metadata before running vector similarity (metadata-first retrieval)
+3. Retrieves top-k chunks from both `esg_documents` and `esg_news` collections
+4. Passes chunks + query to the LLM for synthesis
+5. Returns answer with inline citations (document/page or news source/date) — uncited responses are rejected and retried
 
 ### ESG Scoring Agent
-Aggregates retrieved chunks and news sentiment per company per year to produce pillar scores (0–100). Computes YoY delta and flags when filing sentiment and news sentiment diverge significantly for the same company and pillar.
+Aggregates retrieved chunks and news sentiment per company per year to produce pillar scores (0–100) stored in PostgreSQL. Computes YoY delta and flags when filing sentiment and news sentiment diverge significantly for the same company and pillar.
 
 ---
 
@@ -165,11 +173,15 @@ Aggregates retrieved chunks and news sentiment per company per year to produce p
 | **Sentiment Model** | FinBERT (fine-tuned on Indian financial news) |
 | **Embeddings** | `sentence-transformers/all-MiniLM-L6-v2` |
 | **Vector Store** | ChromaDB (two collections: documents + news) |
+| **Relational DB** | PostgreSQL (ESG scores, metadata, anomaly flags) |
+| **Object Storage** | AWS S3 (raw PDFs and scraped documents) |
 | **PDF Parsing** | PyMuPDF |
 | **Backend API** | FastAPI |
-| **Frontend** | Streamlit |
+| **Frontend** | HTML / CSS / JavaScript |
+| **Experiment Tracking** | MLflow |
 | **Data Processing** | Pandas, NumPy |
 | **Containerization** | Docker + Docker Compose |
+| **CI/CD** | GitHub Actions |
 | **News Sources** | MoneyControl, Economic Times, NSE/BSE RSS feeds |
 
 ---
@@ -180,7 +192,7 @@ Aggregates retrieved chunks and news sentiment per company per year to produce p
 esg-sentinel/
 │
 ├── agents/
-│   ├── document_ingestor.py      # PDF parsing, chunking, metadata tagging
+│   ├── document_ingestor.py      # PDF parsing, chunking, S3 upload, metadata tagging
 │   ├── news_monitor.py           # News fetching and ingestion
 │   ├── rag_query_agent.py        # Retrieval-augmented query handler
 │   └── esg_scorer.py             # Pillar scoring and anomaly detection
@@ -192,7 +204,7 @@ esg-sentinel/
 ├── rag/
 │   ├── ingest_documents.py       # Batch PDF ingestion pipeline
 │   ├── ingest_news.py            # News ingestion pipeline
-│   ├── retriever.py              # Unified ChromaDB retriever
+│   ├── retriever.py              # Unified ChromaDB retriever (metadata-first)
 │   └── vector_store/             # Persisted ChromaDB collections
 │
 ├── api/
@@ -203,8 +215,14 @@ esg-sentinel/
 │       ├── scores.py             # GET /score/{company}
 │       └── alerts.py             # GET /alerts
 │
-├── dashboard/
-│   └── app.py                    # Streamlit dashboard
+├── frontend/
+│   ├── index.html                # Main dashboard
+│   ├── style.css                 # Styles
+│   └── app.js                    # API calls and chart rendering
+│
+├── db/
+│   ├── init.sql                  # PostgreSQL schema
+│   └── migrations/               # Schema migration scripts
 │
 ├── data/
 │   ├── sample_reports/           # Sample ESG PDFs for testing
@@ -212,10 +230,17 @@ esg-sentinel/
 │
 ├── docker/
 │   ├── Dockerfile
-│   └── docker-compose.yml        # App + ChromaDB + Streamlit
+│   └── docker-compose.yml        # App + ChromaDB + PostgreSQL + Frontend
 │
 ├── notebooks/
 │   └── finbert_eval.ipynb        # FinBERT benchmarking on Indian news
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml                # GitHub Actions CI pipeline
+│
+├── mlflow/
+│   └── tracking/                 # MLflow experiment logs
 │
 ├── requirements.txt
 └── README.md
@@ -230,14 +255,14 @@ esg-sentinel/
 git clone https://github.com/shreyapatro/esg-sentinel.git
 cd esg-sentinel
 
-# Start all services
+# Start all services (app + ChromaDB + PostgreSQL)
 docker-compose up --build
 
 # Ingest sample ESG documents
 python rag/ingest_documents.py --input data/sample_reports/
 
-# Run the Streamlit dashboard
-streamlit run dashboard/app.py
+# Open the frontend
+open http://localhost:3000
 
 # Query via API
 curl -X POST http://localhost:8000/query \
@@ -257,17 +282,17 @@ curl -X POST http://localhost:8000/query \
 → Retrieves S-pillar news items, classified by FinBERT, with source and date
 
 "Compare the governance score of HDFC Bank vs ICICI Bank"
-→ Scores G-pillar for both from annual report chunks, returns side-by-side
+→ Pulls G-pillar scores from PostgreSQL for both companies, returns side-by-side
 
 "Flag companies where ESG filings look positive but news sentiment is negative"
-→ Anomaly detection agent returns ranked alert list
+→ Anomaly detection agent queries PostgreSQL for divergence flags, returns ranked alert list
 ```
 
 ---
 
 ## 📊 ESG Scoring Framework
 
-Each company receives scores (0–100) per pillar, aggregated from:
+Each company receives scores (0–100) per pillar, aggregated from document and news signals and persisted in PostgreSQL.
 
 | Pillar | Document signals | News signals |
 |---|---|---|
@@ -283,29 +308,36 @@ Anomaly flag: triggered when filing pillar sentiment and news pillar sentiment d
 
 **Two separate vector collections.** Documents and news have fundamentally different retrieval semantics — a BRSR chunk should not compete with a news headline in the same retrieval pool. Separate collections let the RAG agent retrieve from each deliberately and merge at the synthesis stage.
 
+**PostgreSQL for structured data.** ChromaDB handles vector search; PostgreSQL handles everything structured — ESG scores, YoY deltas, anomaly flags, company metadata. Keeping these separate avoids forcing a vector store to do relational work it wasn't designed for.
+
 **FinBERT over general sentiment models.** General-purpose sentiment models misread financial text ("the company cut costs aggressively" is positive in finance, not negative). FinBERT is trained on financial language and extended here for ESG pillar classification on Indian market news.
 
 **Metadata-first chunking.** Every chunk carries `company`, `year`, and `pillar` tags so retrieval can be filtered before vector similarity is even computed — faster and more precise than relying on semantic search alone.
 
 **LLM synthesis with citation enforcement.** The query agent prompt requires the model to cite its sources (document name + page, or news headline + date) for every factual claim in the answer. Responses without citations are rejected and retried.
 
+**HTML/JS frontend over Streamlit.** A decoupled frontend calling FastAPI endpoints is more representative of production AI systems and demonstrates full-stack deployment over a notebook-style UI.
+
 ---
 
 ## 🗺️ Roadmap
 
-- [ ] Document ingestion pipeline (PyMuPDF + ChromaDB)
+- [ ] Document ingestion pipeline (PyMuPDF + ChromaDB + S3)
 - [ ] FinBERT ESG pillar classifier
 - [ ] News monitoring agent
 - [ ] RAG query agent with citation enforcement
-- [ ] FastAPI backend
-- [ ] ESG scoring + anomaly detection agent
-- [ ] Streamlit dashboard
-- [ ] Docker Compose multi-service setup
+- [ ] PostgreSQL schema and ESG scoring model
+- [ ] FastAPI backend (query, score, alerts endpoints)
+- [ ] HTML/JS frontend with chart rendering
+- [ ] Docker Compose multi-service setup (app + ChromaDB + PostgreSQL)
+- [ ] GitHub Actions CI pipeline
+- [ ] MLflow experiment tracking integration
 - [ ] BRSR field extraction (structured metrics from regulated filings)
 - [ ] Nifty 500 full coverage
 - [ ] Alert email/Slack notifications
+- [ ] AWS EC2 deployment
 
-
+---
 
 ## 👩‍💻 Author
 
