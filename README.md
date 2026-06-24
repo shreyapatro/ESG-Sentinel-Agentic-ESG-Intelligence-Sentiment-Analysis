@@ -305,7 +305,7 @@ Anomaly flag: triggered when filing pillar sentiment and news pillar sentiment d
 - [ ] Nifty 500 full coverage
 - [ ] Alert email/Slack notifications
 
----
+
 
 ## 👩‍💻 Author
 
