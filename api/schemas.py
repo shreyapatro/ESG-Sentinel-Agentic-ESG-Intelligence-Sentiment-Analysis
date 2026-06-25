@@ -14,6 +14,7 @@ class Citation(BaseModel):
     source: str
     page: Optional[int] = None
     date: Optional[str] = None
+    text: Optional[str] = None
 
 
 class QueryResponse(BaseModel):
