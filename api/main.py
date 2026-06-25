@@ -1,7 +1,7 @@
 from time import perf_counter
 from rag.retriever import retrieve_document_chunks
 from fastapi import FastAPI
-
+from models.llm import generate_answer
 from api.schemas import QueryRequest, QueryResponse
 
 app = FastAPI(
@@ -38,10 +38,7 @@ def query_esg(request: QueryRequest):
     ]
 
     if retrieved_chunks:
-        answer = (
-            f"Found {len(retrieved_chunks)} relevant ESG evidence chunks for "
-            f"{request.company}. LLM synthesis will be added in the next stage."
-        )
+        answer = generate_answer(request.question, retrieved_chunks)
     else:
         answer = f"No relevant ESG evidence found for {request.company}."
 

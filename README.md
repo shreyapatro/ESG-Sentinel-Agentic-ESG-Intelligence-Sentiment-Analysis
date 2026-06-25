@@ -169,7 +169,7 @@ Aggregates retrieved chunks and news sentiment per company per year to produce p
 | Layer | Technology |
 |---|---|
 | **Agent Orchestration** | LangChain / LangGraph |
-| **LLM** | Claude claude-sonnet-4-6 via Anthropic API |
+| **LLM** | Groq API, using `llama-3.1-8b-instant` or `llama-3.3-70b-versatile` |
 | **Sentiment Model** | FinBERT (fine-tuned on Indian financial news) |
 | **Embeddings** | `sentence-transformers/all-MiniLM-L6-v2` |
 | **Vector Store** | ChromaDB (two collections: documents + news) |
@@ -250,6 +250,18 @@ esg-sentinel/
 
 ## 🚀 Getting Started
 
+## Environment Variables
+
+Create a `.env` file for local secrets:
+
+```env
+GROQ_API_KEY=your_groq_api_key_here
+LLM_PROVIDER=groq
+LLM_MODEL=llama-3.1-8b-instant
+```
+
+Do not commit `.env` to GitHub.
+
 ```bash
 # Clone the repository
 git clone https://github.com/shreyapatro/esg-sentinel.git
@@ -319,6 +331,18 @@ Anomaly flag: triggered when filing pillar sentiment and news pillar sentiment d
 **HTML/JS frontend over Streamlit.** A decoupled frontend calling FastAPI endpoints is more representative of production AI systems and demonstrates full-stack deployment over a notebook-style UI.
 
 ---
+
+
+## Current Implementation Status
+
+- [x] FastAPI backend scaffold
+- [x] PDF extraction with PyMuPDF
+- [x] Document chunking with metadata
+- [x] Local embeddings with sentence-transformers
+- [x] ChromaDB vector storage
+- [x] Semantic retrieval
+- [x] Connect `/query` endpoint to vector retrieval
+- [ ] Groq LLM answer synthesis with citations
 
 ## 🗺️ Roadmap
 
