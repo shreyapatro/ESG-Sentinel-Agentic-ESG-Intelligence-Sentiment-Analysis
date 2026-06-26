@@ -49,7 +49,7 @@ def ingest_pdf(
 
 def main():
     parser = argparse.ArgumentParser(description="Ingest ESG PDF documents")
-    parser.add_argument("--input", required=True, help="Path to a PDF file")
+    parser.add_argument("--input", required=True, help="Path to a PDF file or folder")
     parser.add_argument("--company", required=True, help="Company name, e.g. Infosys")
     parser.add_argument("--ticker", required=True, help="Ticker symbol, e.g. INFY")
     parser.add_argument("--year", required=True, type=int, help="Document year, e.g. 2023")
@@ -68,16 +68,25 @@ def main():
     input_path = Path(args.input)
 
     if input_path.is_file() and input_path.suffix.lower() == ".pdf":
+        pdf_paths = [input_path]
+    elif input_path.is_dir():
+        pdf_paths = sorted(input_path.glob("*.pdf"))
+    else:
+        raise ValueError("--input must be a PDF file or a folder containing PDF files")
+
+    if not pdf_paths:
+        raise ValueError(f"No PDF files found in {input_path}")
+
+    for pdf_path in pdf_paths:
+        print(f"\nIngesting {pdf_path}")
         ingest_pdf(
-            pdf_path=str(input_path),
+            pdf_path=str(pdf_path),
             company_name=args.company,
             ticker=args.ticker,
             document_year=args.year,
             document_type=args.document_type,
             esg_pillar=args.pillar,
         )
-    else:
-        raise ValueError("For now, --input must be a single PDF file")
 
 
 if __name__ == "__main__":
