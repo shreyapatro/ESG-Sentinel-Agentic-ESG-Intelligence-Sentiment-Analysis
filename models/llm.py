@@ -16,7 +16,13 @@ def build_context(retrieved_chunks: list[dict]) -> str:
         text = chunk["text"]
 
         context_blocks.append(
-            f"[{index}] Source: {source}, page {page}\n{text}"
+            f"""
+            Evidence {index}
+            source_document: {source}
+            page_number: {page}
+            text:
+            {text}
+            """.strip()
         )
 
     return "\n\n".join(context_blocks)
@@ -39,7 +45,10 @@ Answer the user's question using only the evidence below.
 Rules:
 - Use only the provided evidence.
 - If the evidence is insufficient, say that the available evidence is insufficient.
-- Include citations in the format (source, page X).
+- Every factual claim must include a citation.
+- Citation format must be exactly: (source_document, page X)
+- Replace source_document with the actual filename from the evidence.
+- Do not cite as Evidence 1, Evidence 2, [1], or [2].
 - Keep the answer concise and factual.
 
 Question:

@@ -1,6 +1,6 @@
 from time import perf_counter
 from rag.retriever import retrieve_document_chunks
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from models.llm import generate_answer
 from api.schemas import QueryRequest, QueryResponse
 
@@ -38,7 +38,15 @@ def query_esg(request: QueryRequest):
     ]
 
     if retrieved_chunks:
-        answer = generate_answer(request.question, retrieved_chunks)
+        try:
+            answer = generate_answer(request.question, retrieved_chunks)
+        except ValueError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+        except Exception as error:
+            raise HTTPException(
+                status_code=502,
+                detail="LLM answer generation failed. Please try again later.",
+            ) from error
     else:
         answer = f"No relevant ESG evidence found for {request.company}."
 
