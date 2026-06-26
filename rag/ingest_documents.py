@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 
 from agents.document_ingestor import build_document_chunks, extract_pdf_pages
+from data.company_metadata import load_company_by_ticker
 from models.embeddings import embed_texts
 from rag.vector_store import store_document_chunks
 
@@ -50,13 +51,16 @@ def ingest_pdf(
 def main():
     parser = argparse.ArgumentParser(description="Ingest ESG PDF documents")
     parser.add_argument("--input", required=True, help="Path to a PDF file or folder")
-    parser.add_argument("--company", required=True, help="Company name, e.g. Infosys")
     parser.add_argument("--ticker", required=True, help="Ticker symbol, e.g. INFY")
     parser.add_argument("--year", required=True, type=int, help="Document year, e.g. 2023")
     parser.add_argument(
         "--document-type",
         required=True,
         help="Document type, e.g. annual_report, brsr, sustainability_report, sample_report",
+    )
+    parser.add_argument(
+        "--company",
+        help="Company name. If omitted, it is loaded from data/company_list.csv using --ticker.",
     )
     parser.add_argument(
         "--pillar",
@@ -66,6 +70,12 @@ def main():
 
     args = parser.parse_args()
     input_path = Path(args.input)
+
+    company_name = args.company
+
+    if not company_name:
+        company_metadata = load_company_by_ticker(args.ticker)
+        company_name = company_metadata["company_name"]
 
     if input_path.is_file() and input_path.suffix.lower() == ".pdf":
         pdf_paths = [input_path]
@@ -81,7 +91,7 @@ def main():
         print(f"\nIngesting {pdf_path}")
         ingest_pdf(
             pdf_path=str(pdf_path),
-            company_name=args.company,
+            company_name=company_name,
             ticker=args.ticker,
             document_year=args.year,
             document_type=args.document_type,
