@@ -1,5 +1,5 @@
+from hashlib import md5
 from pathlib import Path
-from uuid import uuid4
 
 import fitz
 
@@ -55,6 +55,19 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str
     return chunks
 
 
+def make_chunk_id(
+    source_document: str,
+    page_number: int,
+    chunk_index: int,
+    text: str,
+) -> str:
+    """
+    Create a stable chunk ID so repeated ingestion does not create duplicates.
+    """
+    raw_id = f"{source_document}:{page_number}:{chunk_index}:{text}"
+    return md5(raw_id.encode("utf-8")).hexdigest()
+
+
 def build_document_chunks(
     pages: list[dict],
     company_name: str,
@@ -71,10 +84,15 @@ def build_document_chunks(
     for page in pages:
         text_chunks = chunk_text(page["text"])
 
-        for text in text_chunks:
+        for chunk_index, text in enumerate(text_chunks):
             document_chunks.append(
                 {
-                    "chunk_id": str(uuid4()),
+                    "chunk_id": make_chunk_id(
+                        source_document=page["source_document"],
+                        page_number=page["page_number"],
+                        chunk_index=chunk_index,
+                        text=text,
+                    ),
                     "company_name": company_name,
                     "ticker": ticker,
                     "document_year": document_year,
