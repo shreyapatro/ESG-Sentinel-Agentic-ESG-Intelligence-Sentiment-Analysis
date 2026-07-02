@@ -3,7 +3,7 @@ from rag.retriever import retrieve_document_chunks
 from fastapi import FastAPI, HTTPException
 from models.llm import generate_answer
 from api.schemas import QueryRequest, QueryResponse
-from data.company_metadata import load_company_by_ticker
+from data.company_metadata import load_companies, load_company_by_ticker
 
 app = FastAPI(
     title="ESG Sentinel API",
@@ -25,6 +25,14 @@ def root():
 def health_check():
     return {"status": "ok", "service": "ESG Sentinel API"}
 
+@app.get("/companies")
+def get_companies():
+    try:
+        companies = load_companies()
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    return {"companies": companies}
 
 @app.post("/query", response_model=QueryResponse)
 def query_esg(request: QueryRequest):
