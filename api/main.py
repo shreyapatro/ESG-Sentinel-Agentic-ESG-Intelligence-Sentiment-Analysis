@@ -85,3 +85,26 @@ def query_esg(request: QueryRequest):
         pillar=request.pillar,
         latency_ms=latency_ms,
     )
+
+@app.post("/retrieve")
+def retrieve_esg(request: QueryRequest):
+    company_name = request.company
+
+    try:
+        company_metadata = load_company_by_ticker(request.company)
+        company_name = company_metadata["company_name"]
+    except ValueError:
+        pass
+
+    retrieved_chunks = retrieve_document_chunks(
+        query=request.question,
+        company_name=company_name,
+        pillar=request.pillar,
+        year=request.year,
+        top_k=3,
+    )
+
+    return {
+        "company": company_name,
+        "results": retrieved_chunks,
+    }
