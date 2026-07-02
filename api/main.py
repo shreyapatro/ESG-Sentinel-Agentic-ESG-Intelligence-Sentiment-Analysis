@@ -1,9 +1,11 @@
 from time import perf_counter
-from rag.retriever import retrieve_document_chunks
+
 from fastapi import FastAPI, HTTPException
-from models.llm import generate_answer
+
 from api.schemas import QueryRequest, QueryResponse
 from data.company_metadata import load_companies, load_company_by_ticker
+from models.llm import generate_answer
+from rag.retriever import retrieve_document_chunks
 
 app = FastAPI(
     title="ESG Sentinel API",

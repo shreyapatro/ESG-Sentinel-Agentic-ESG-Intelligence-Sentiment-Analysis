@@ -2,7 +2,6 @@ from pathlib import Path
 
 import chromadb
 
-
 CHROMA_PERSIST_DIR = Path("rag/vector_store")
 
 

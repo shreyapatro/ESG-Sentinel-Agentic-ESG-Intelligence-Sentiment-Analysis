@@ -1,7 +1,6 @@
 import csv
 from pathlib import Path
 
-
 COMPANY_LIST_PATH = Path("data/company_list.csv")
 
 

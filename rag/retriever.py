@@ -39,7 +39,7 @@ def retrieve_document_chunks(
     metadatas = results["metadatas"][0]
     distances = results["distances"][0]
 
-    for document, metadata, distance in zip(documents, metadatas, distances):
+    for document, metadata, distance in zip(documents, metadatas, distances, strict=True):
         retrieved_chunks.append(
             {
                 "text": document,

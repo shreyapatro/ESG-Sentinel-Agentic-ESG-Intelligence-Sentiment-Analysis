@@ -40,7 +40,7 @@ def ingest_pdf(
     if embeddings:
         print(f"Each embedding has {len(embeddings[0])} dimensions")
 
-    for chunk, embedding in zip(chunks[:3], embeddings[:3]):
+    for chunk, embedding in zip(chunks[:3], embeddings[:3], strict=True):
         preview = chunk["text"][:200].replace("\n", " ")
         print(f"\nChunk {chunk['chunk_id']}")
         print(f"Company: {chunk['company_name']} | Page: {chunk['page_number']}")
