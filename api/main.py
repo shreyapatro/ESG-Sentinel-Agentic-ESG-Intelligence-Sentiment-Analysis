@@ -3,6 +3,7 @@ from rag.retriever import retrieve_document_chunks
 from fastapi import FastAPI, HTTPException
 from models.llm import generate_answer
 from api.schemas import QueryRequest, QueryResponse
+from data.company_metadata import load_company_by_ticker
 
 app = FastAPI(
     title="ESG Sentinel API",
@@ -20,9 +21,17 @@ def health_check():
 def query_esg(request: QueryRequest):
     start_time = perf_counter()
 
+    company_name = request.company
+
+    try:
+        company_metadata = load_company_by_ticker(request.company)
+        company_name = company_metadata["company_name"]
+    except ValueError:
+        pass
+
     retrieved_chunks = retrieve_document_chunks(
         query=request.question,
-        company_name=request.company,
+        company_name=company_name,
         pillar=request.pillar,
         year=request.year,
         top_k=3,
@@ -55,7 +64,7 @@ def query_esg(request: QueryRequest):
     return QueryResponse(
         answer=answer,
         citations=citations,
-        company=request.company,
+        company=company_name,
         pillar=request.pillar,
         latency_ms=latency_ms,
     )
